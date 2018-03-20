@@ -1,0 +1,20 @@
+{
+"cell" : "svdRNN", 
+"initial_learning_rate" : 0.001, 
+"lr_decay" : 0.99, 
+"num_epochs" : 100, 
+"dropout_keep_rate" : 1.0, 
+"num_units" : 128, 
+"r_size" : 16,
+"r_margin": 0.01, 
+"gpu_flag" : 1, 
+"batch_size" : 512, 
+"random_seed" : 1000, 
+"dataset" : "mnist.784", 
+"model_dir" : "results/model",
+"pred_dir" : "results/pred",
+"load_model" : 0, 
+"train_flag" : 1, 
+"batch_norm" : 0,
+"display_epoch_num" : 10
+}
