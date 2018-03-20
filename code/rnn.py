@@ -2,7 +2,6 @@ import math, time
 import tensorflow as tf
 import numpy as np
 import svdrnn
-import ornn
 import Params
 import sys,os
 from tensorflow.python.framework import ops
