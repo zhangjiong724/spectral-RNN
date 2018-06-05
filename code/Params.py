@@ -8,19 +8,19 @@ class Params (object):
     def __init__(self):
         self.cell = None # RNN cell
         self.initial_learning_rate = math.exp(-10) # learning rate for SGD, [exp(-10), 1]
-        self.lr_decay = 0.8 # the multiplier to multiply the learning rate by every 1k iterations, in range of [0.8, 0.999]
+        self.lr_decay = 0.8 # the multiplier to multiply the learning rate every epoch
         self.num_epochs = 100 # number of epochs
         self.dropout_keep_rate = 0.5 # percent of output units that are kept during dropout, in range (0, 1]
         self.num_units = 200 # number of units
-        self.num_layers = 1 # number of units
-        self.r_size = 60 # the number of reflectors used in svdRNN
-        self.r_margin = 0.01 # the number of reflectors used in svdRNN
+        self.num_layers = 1 # number of layers
+        self.r_size = 60 # the number of Householder reflectors used in Spectral-RNN
+        self.r_margin = 0.01 # the singular value margin in Spectral-RNN
         self.time_steps = None # time steps, time_steps*input_size = sequence length
         self.input_size = None # dimensionality of input features at each time step
         self.output_size = None # dimensionality of label
-        self.gpu_flag = True # use GPU or not
+        self.gpu_flag = True # use GPU or not, Spectral-RNN only available in GPU mode
         self.random_seed = 1000 # random seed
-        self.dataset = 'mnist.28' # dataset name
+        self.dataset = 'mnist.28' # dataset name, mnist.[length] where length will overwrite self.time_steps
         self.batch_size = 128 # batch size
         self.regression_flag = True # regression or classification
         self.model_dir = '' # directory to save model, will append .cell_name

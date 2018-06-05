@@ -1,7 +1,7 @@
 import math, time
 import tensorflow as tf
 import numpy as np
-import svdrnn
+import spectral_rnn
 import Params
 import sys,os
 from tensorflow.python.framework import ops
@@ -75,8 +75,8 @@ class RNNModel (object):
             self.rnn_cell = tf.contrib.rnn.BasicRNNCell(
                     num_units=params.num_units
                     )
-        elif params.cell == "svdRNN":
-            self.rnn_cell = svdrnn.svdRNNCell(
+        elif params.cell == "SpectralRNN":
+            self.rnn_cell = spectral_rnn.SpectralRNNCell(
                     n_h=params.num_units,
                     n_r=params.r_size,
                     r_margin = params.r_margin
@@ -172,7 +172,7 @@ class RNNModel (object):
                         self.learning_rate: learning_rate}
                 # Run optimization op (backprop)
                 self.session.run(self.train_op, feed_dict=feed_dict)
-                if params.cell=='svdRNN' or params.cell=='oRNN':
+                if params.cell=='SpectralRNN':
                     self.session.run(normalize_op)
 
                 batch_index += 1
@@ -192,7 +192,7 @@ class RNNModel (object):
                 if os.path.isdir(os.path.dirname(params.model_dir+'/'+params.dataset)) == False:
                     os.makedirs(params.model_dir+'/'+params.dataset)
                     print 'making dir: '+params.model_dir+'/'+params.dataset
-                if params.cell=='svdRNN' or params.cell=='oRNN':
+                if params.cell=='SpectralRNN':
                     self.save("%s/%s/%s.%s.%s.%s.%s" % (params.model_dir,params.dataset,params.cell,params.r_size,params.num_units,"init"+str(params.initial_learning_rate),"epoch"+str(epoch) ))
                 else:
                     self.save("%s/%s/%s.%s.%s.%s" % (params.model_dir,params.dataset,params.cell,params.num_units,"init"+str(params.initial_learning_rate),"epoch"+str(epoch) ))

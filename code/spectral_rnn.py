@@ -1,16 +1,30 @@
 import tensorflow as tf
 from tensorflow.python.util import nest
 import numpy as np
+import os
 #from svd_ops import tf_svdProd, tf_svdProd_inv
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import sparse_ops
 
 ############################################################
+############ BLAS3 version of SVD ops ######################
+############################################################
+svd_block_prod_module = tf.load_op_library(os.path.dirname(os.path.abspath(__file__)) + '/magma_svd_ops/svd_block_prod_gpu.so')
+############################################################
+grad_svd_block_prod_module = tf.load_op_library(os.path.dirname(os.path.abspath(__file__)) + '/magma_svd_ops/grad_svd_block_prod_gpu.so')
+
+@ops.RegisterGradient("SvdBlockProdGpu")
+def _svd_block_prod_gpu_grad(op, grad):
+    H = op.inputs[0]
+    U = op.inputs[1]
+    isForward = op.get_attr("is_forward")
+    return grad_svd_block_prod_module.grad_svd_block_prod_gpu(H,U,grad, isForward)
+############################################################
 ############ BLAS2 version of SVD ops ######################
 ############################################################
-svd_prod_module = tf.load_op_library('./cuda_svd_ops/svd_prod_gpu.so')
-grad_svd_prod_module = tf.load_op_library('./cuda_svd_ops/grad_svd_prod_gpu.so')
+svd_prod_module = tf.load_op_library(os.path.dirname(os.path.abspath(__file__)) + '/cuda_svd_ops/svd_prod_gpu.so')
+grad_svd_prod_module = tf.load_op_library(os.path.dirname(os.path.abspath(__file__)) + '/cuda_svd_ops/grad_svd_prod_gpu.so')
 @ops.RegisterGradient("SvdProdGpu")
 def _svd_prod_gpu_grad(op, grad):
     H = op.inputs[0]
@@ -18,8 +32,8 @@ def _svd_prod_gpu_grad(op, grad):
     return grad_svd_prod_module.grad_svd_prod_gpu(H,U,grad)
 
 ############################################################
-svd_inv_prod_module = tf.load_op_library('./cuda_svd_ops/svd_inv_prod_gpu.so')
-grad_svd_inv_prod_module = tf.load_op_library('./cuda_svd_ops/grad_svd_inv_prod_gpu.so')
+svd_inv_prod_module = tf.load_op_library(os.path.dirname(os.path.abspath(__file__)) + '/cuda_svd_ops/svd_inv_prod_gpu.so')
+grad_svd_inv_prod_module = tf.load_op_library(os.path.dirname(os.path.abspath(__file__)) + '/cuda_svd_ops/grad_svd_inv_prod_gpu.so')
 @ops.RegisterGradient("SvdInvProdGpu")
 def _svd_inv_prod_gpu_grad(op, grad):
     H = op.inputs[0]
@@ -28,7 +42,7 @@ def _svd_inv_prod_gpu_grad(op, grad):
 
 ############################################################
 
-class svdRNNCell(tf.contrib.rnn.RNNCell):
+class SpectralRNNCell(tf.contrib.rnn.RNNCell):
     """Implements a simple distribution based recurrent unit that keeps moving
     averages of the mean map embeddings of features of inputs.
     """
@@ -36,16 +50,20 @@ class svdRNNCell(tf.contrib.rnn.RNNCell):
     n_h: hidden state size
     n_o: output size
     n_r: reflector size
+    variables: pass a dictionary of Variables, and we will not create new ones
+    backend: blas3, blas2 or python
     """
 
     def __init__(self, n_h, n_r = None, r_margin = 0.01,
-                 linear_out=False, activation=tf.nn.relu):
+                 linear_out=False, activation=tf.nn.relu, variables=None, backend="blas3"):
         self._n_h = n_h
         self._n_r = n_r or n_h//4
         self._r_margin = r_margin
 
         self._linear_out = linear_out
         self._activation = activation
+        self._variables = variables
+        self._backend = backend
 
     @property
     def state_size(self):
@@ -71,7 +89,7 @@ class svdRNNCell(tf.contrib.rnn.RNNCell):
             """
             o_t = W^o mu_t + b^o
             """
-            output = _svdlinear([inputs, state], self._n_h, self._n_r, True, r=self._r_margin,  scope='output')
+            output = _svdlinear([inputs, state], self._n_h, self._n_r, True, r=self._r_margin,  scope='output', variables=self._variables, backend=self._backend)
             #output = _linear([inputs, state], self._n_h, True, scope='output')
 
 
@@ -84,7 +102,7 @@ class svdRNNCell(tf.contrib.rnn.RNNCell):
 
 
 # No longer publicly expose function in tensorflow.
-def _svdlinear(args, output_size, reflector_size, bias, bias_start=0.0, sig_mean = 1.0, r = 0.01, scope=None):
+def _svdlinear(args, output_size, reflector_size, bias, bias_start=0.0, sig_mean = 1.0, r = 0.01, scope=None, variables=None, backend="blas3"):
     """Linear map: sum_i(args[i] * W[i]), where W[i] is a variable.
 
     Args:
@@ -122,38 +140,62 @@ def _svdlinear(args, output_size, reflector_size, bias, bias_start=0.0, sig_mean
     dtype = [a.dtype for a in args][0]
     # computation for svd:Hprod
     with tf.variable_scope(scope or "svdHprod"):
-        U_full = tf.get_variable(
-            "Householder_U_full", [reflector_size, output_size], dtype=dtype)
+        if variables:
+            U_full = variables["Householder_U_full"]
+        else:
+            U_full = tf.get_variable(
+                "Householder_U_full", [reflector_size, output_size], dtype=dtype)
         U = tf.matrix_band_part(U_full, 0, -1) # upper triangular
-        p = tf.get_variable(
-            "p", [ output_size], dtype=dtype,
-            initializer=tf.constant_initializer(np.zeros(output_size)))
+        if variables: 
+            p = variables["p"]
+        else:
+            p = tf.get_variable(
+                "p", [ output_size], dtype=dtype,
+                initializer=tf.constant_initializer(np.zeros(output_size)))
         Sig = 2*r*(tf.sigmoid(p) - 0.5) + sig_mean
-        V_full = tf.get_variable(
-            "Householder_V_full", [reflector_size, output_size], dtype=dtype)
+        if variables:
+            V_full = variables["Householder_V_full"]
+        else:
+            V_full = tf.get_variable(
+                "Householder_V_full", [reflector_size, output_size], dtype=dtype)
         V = tf.matrix_band_part(V_full, 0, -1) # upper triangular
 
 
-        #svd_term = tf_svdProd( args[1], V) # python operator
-        svd_term = svd_prod_module.svd_prod_gpu( args[1], V) # BLAS2 operator
-        svd_term = tf.multiply(svd_term, Sig)
-        #svd_term = tf_svdProd_inv( svd_term, U) # python operator
-        svd_term = svd_inv_prod_module.svd_inv_prod_gpu( svd_term, U) # BLAS2 operator
+        if backend == "python":
+            svd_term = tf_svdProd( args[1], V) # python operator
+            svd_term = tf.multiply(svd_term, Sig)
+            svd_term = tf_svdProd_inv( svd_term, U) # python operator
+        elif backend == "blas2":
+            svd_term = svd_prod_module.svd_prod_gpu( args[1], V) # BLAS2 operator
+            svd_term = tf.multiply(svd_term, Sig)
+            svd_term = svd_inv_prod_module.svd_inv_prod_gpu( svd_term, U) # BLAS2 operator
+        elif backend == "blas3":
+            svd_term = svd_block_prod_module.svd_block_prod_gpu( args[1], V, True) # BLAS3 operator
+            svd_term = tf.multiply(svd_term, Sig)
+            svd_term = svd_block_prod_module.svd_block_prod_gpu( svd_term, U, False) # BLAS3 operator
+        else:
+            raise ValueError("Unknown backend " + backend)
 
 
 
     # Now the computation for the rest
     with tf.variable_scope(scope or "svdLinear"):
-        matrix = tf.get_variable(
-            "Matrix", [args[0].shape[1].value, output_size], dtype=dtype)
+        if variables:
+            matrix = variables["Matrix"]
+        else:
+            matrix = tf.get_variable(
+                "Matrix", [args[0].shape[1].value, output_size], dtype=dtype)
         res = tf.matmul(args[0], matrix)
         if not bias:
             return res + svd_term
-        bias_term = tf.get_variable(
-            "Bias", [output_size],
-            dtype=dtype,
-            initializer=tf.constant_initializer(bias_start, dtype=dtype)
-        )
+        if variables:
+            bias_term = variables["Bias"]
+        else:
+            bias_term = tf.get_variable(
+                "Bias", [output_size],
+                dtype=dtype,
+                initializer=tf.constant_initializer(bias_start, dtype=dtype)
+            )
     return res + bias_term + svd_term
 
 def _linear(args, output_size, bias, bias_start=0.0, scope=None):

@@ -14,12 +14,12 @@ TF_LIB= `python -c 'import tensorflow as tf; print(tf.sysconfig.get_lib())'`
 
 CC        = gcc -O2 -pthread
 GPUCC     = nvcc
-CFLAGS    = -std=c++11 -I$(TF_INC) -L$(TF_LIB)  -I$(TF_INC)/external/nsync/public #-ltensorflow_framework
+CFLAGS    = -std=c++11 -I$(TF_INC) -L$(TF_LIB) -I$(TF_INC)/external/nsync/public  -ltensorflow_framework 
 GPUCFLAGS = -c --expt-relaxed-constexpr
 LFLAGS    = -pthread -shared -fPIC
 GPULFLAGS = -x cu -Xcompiler -fPIC
 GPUDEF    = -DGOOGLE_CUDA=1
-CGPUFLAGS = -lcuda -lcublas 
+CGPUFLAGS = -lcuda -lcublas
 
 SRC       = svd_prod_gpu.cc
 GPUSRC    = svd_prod_gpu.cu.cc
@@ -42,6 +42,9 @@ INV_GRAD_PROD      = grad_svd_inv_prod_gpu.so
 INV_GRAD_GPUPROD   = grad_svd_inv_prod_cu_gpu.o
 
 default: gpu  gpu-grad inv-gpu inv-gpu-grad
+
+cpu:
+	$(CXX) $(CFLAGS) $(SRC) $(LFLAGS) $(OSFLAGS) -o $(PROD)
 
 gpu:
 	$(GPUCC) $(CFLAGS) $(GPUCFLAGS) $(GPUSRC) $(GPULFLAGS) $(GPUDEF) -o $(GPUPROD)
