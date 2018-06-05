@@ -1,4 +1,5 @@
 #BLAS2 operator:	
+
     Requires:
 		CUDA, cuBLAS, cudnn, tensorflow-gpu
 
@@ -7,6 +8,7 @@
 		make
 
 #BLAS3 operator:	
+
     Requires:
 		CUDA, cuBLAS, cudnn, MAGMA, tensorflow-gpu
 
@@ -15,6 +17,7 @@
 		make
 
 #Running:
+
     python main.py test.json
 
 

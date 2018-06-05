@@ -103,40 +103,31 @@ class SpectralRNNCell(tf.contrib.rnn.RNNCell):
 
 # No longer publicly expose function in tensorflow.
 def _svdlinear(args, output_size, reflector_size, bias, bias_start=0.0, sig_mean = 1.0, r = 0.01, scope=None, variables=None, backend="blas3"):
-    """Linear map: sum_i(args[i] * W[i]), where W[i] is a variable.
+    """Linear map with svd operator
 
     Args:
       args: a 2D Tensor or a list of 2D, batch x n, Tensors.
       output_size: int, second dimension of W[i].
       bias: boolean, whether to add a bias term or not.
       bias_start: starting value to initialize the bias; 0 by default.
+      sig_mean: initial and "mean" value of singular values, usually set to 1.0,
+                for ResNet should be set to 0.0
+      r: singular margin, the allowed margin for singular values
       scope: VariableScope for the created subgraph; defaults to "Linear".
+      variables: pass a dictionary of Variables, and we will not create new ones
+      backend: blas3, blas2 or python
 
     Returns:
-      A 2D Tensor with shape [batch x output_size] equal to
-      sum_i(args[i] * W[i]), where W[i]s are newly created matrices.
+      A 2D Tensor with shape [batch x output_size] 
 
     Raises:
-      ValueError: if some of the arguments has unspecified or wrong shape.
+      ValueError: if some of the arguments has unspecified or wrong shape or unknown backend is passed
     """
     if args is None or (nest.is_sequence(args) and not args):
         raise ValueError("`args` must be specified")
     if not nest.is_sequence(args):
         args = [args]
 
-    # Calculate the total size of arguments on dimension 1.
-    '''
-    total_arg_size = 0
-    shapes = [a.get_shape() for a in args]
-    for shape in shapes:
-        if shape.ndims != 2:
-            raise ValueError("linear is expecting 2D arguments: %s" % shapes)
-        if shape[1].value is None:
-            raise ValueError("linear expects shape[1] to be provided for shape %s, "
-                           "but saw %s" % (shape, shape[1]))
-        else:
-            total_arg_size += shape[1].value
-    '''
     dtype = [a.dtype for a in args][0]
     # computation for svd:Hprod
     with tf.variable_scope(scope or "svdHprod"):

@@ -125,7 +125,6 @@ class RNNModel (object):
         #optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
 
         normalize_op = [tf.assign(v,tf.nn.l2_normalize(tf.matrix_band_part(v,0,-1),1)) for v in self.normalize_vars]
-        #normalize_op = [tf.assign(v,tf.nn.l2_normalize(v,1)) for v in self.normalize_vars]
         # Initialize the variables (i.e. assign their default value)
         init = tf.global_variables_initializer()
 
@@ -196,11 +195,6 @@ class RNNModel (object):
                     self.save("%s/%s/%s.%s.%s.%s.%s" % (params.model_dir,params.dataset,params.cell,params.r_size,params.num_units,"init"+str(params.initial_learning_rate),"epoch"+str(epoch) ))
                 else:
                     self.save("%s/%s/%s.%s.%s.%s" % (params.model_dir,params.dataset,params.cell,params.num_units,"init"+str(params.initial_learning_rate),"epoch"+str(epoch) ))
-            ## early exit if reach best training
-            #if params.regression_flag and train_error[-1] == 0.0:
-            #    break
-            #elif not params.regression_flag and train_error[-1] == 1.0:
-            #    break
 
             if np.isnan(train_error[-1]) or np.isinf(train_error[-1]) or np.isnan(test_error[-1]) or np.isinf(test_error[-1]):
                 print("found nan or inf, stop training")
@@ -237,8 +231,6 @@ class RNNModel (object):
         # error
         cost = self.accuracy
         # relative error
-        #cost = tf.reduce_sum(tf.pow(tf.divide(self.pred-self.y, self.y), 2))
-        #cost = tf.reduce_sum(tf.pow((self.pred-self.y)/self.y, 2))
         validate_cost = 0.0
         for batch_begin in range(0, len(x), batch_size):
             # get batch x and y
@@ -258,9 +250,6 @@ class RNNModel (object):
     def save(self, filename):
         print "save model ", filename
 
-        #for i in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
-        #    print i.name  # list all var to save
-
         saver = tf.train.Saver()
         saver.save(self.session, filename)
 
@@ -273,10 +262,6 @@ class RNNModel (object):
 
         saver = tf.train.Saver()
         saver.restore(self.session, filename)
-
-        #for i in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
-        #    print i.name  # list all var to save
-        # restore variables
 
         graph = tf.get_default_graph()
         self.x = graph.get_tensor_by_name("Placeholder:0")
